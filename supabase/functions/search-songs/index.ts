@@ -9,6 +9,7 @@ const corsHeaders = {
 
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token'
 const SPOTIFY_SEARCH_URL = 'https://api.spotify.com/v1/search'
+const SPOTIFY_TRACK_URL = 'https://api.spotify.com/v1/tracks'
 const MUSIXMATCH_API_URL = 'https://api.musixmatch.com/ws/1.1'
 
 serve(async (req) => {
@@ -18,12 +19,12 @@ serve(async (req) => {
   }
 
   try {
-    const { query } = await req.json()
-    console.log('Received query:', query); // Debug log
+    const { query, spotify_id } = await req.json()
+    console.log('Received query:', query, 'spotify_id:', spotify_id); // Debug log
 
-    if (!query) {
+    if (!query && !spotify_id) {
       return new Response(
-        JSON.stringify({ error: 'Query parameter is required' }),
+        JSON.stringify({ error: 'Either query or spotify_id parameter is required' }),
         { 
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -48,33 +49,59 @@ serve(async (req) => {
     const { access_token } = await spotifyTokenResponse.json()
     console.log('Got Spotify access token'); // Debug log
 
-    // Search Spotify
-    const spotifyResponse = await fetch(
-      `${SPOTIFY_SEARCH_URL}?q=${encodeURIComponent(query)}&type=track&limit=5`,
-      {
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-        },
-      }
-    )
+    let tracks = [];
 
-    const spotifyData = await spotifyResponse.json()
-    console.log('Spotify search results:', spotifyData); // Debug log
-
-    if (!spotifyData.tracks?.items) {
-      return new Response(
-        JSON.stringify({ error: 'No tracks found' }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    if (spotify_id) {
+      // Fetch single track
+      const trackResponse = await fetch(
+        `${SPOTIFY_TRACK_URL}/${spotify_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
         }
       )
-    }
+      const trackData = await trackResponse.json()
+      console.log('Spotify track data:', trackData); // Debug log
 
-    const tracks = spotifyData.tracks.items.map((track: any) => ({
-      spotify_id: track.id,
-      title: track.name,
-      artist: track.artists[0].name,
-    }))
+      if (trackData.error) {
+        throw new Error(trackData.error.message);
+      }
+
+      tracks = [{
+        spotify_id: trackData.id,
+        title: trackData.name,
+        artist: trackData.artists[0].name,
+      }];
+    } else {
+      // Search tracks
+      const spotifyResponse = await fetch(
+        `${SPOTIFY_SEARCH_URL}?q=${encodeURIComponent(query)}&type=track&limit=5`,
+        {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        }
+      )
+
+      const spotifyData = await spotifyResponse.json()
+      console.log('Spotify search results:', spotifyData); // Debug log
+
+      if (!spotifyData.tracks?.items) {
+        return new Response(
+          JSON.stringify({ error: 'No tracks found' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        )
+      }
+
+      tracks = spotifyData.tracks.items.map((track: any) => ({
+        spotify_id: track.id,
+        title: track.name,
+        artist: track.artists[0].name,
+      }));
+    }
 
     // For each track, get lyrics from Musixmatch
     const tracksWithLyrics = await Promise.all(
@@ -86,6 +113,7 @@ serve(async (req) => {
             )}&q_artist=${encodeURIComponent(track.artist)}&apikey=${MUSIXMATCH_API_KEY}`
           )
           const lyricsData = await lyricsResponse.json()
+          console.log('Lyrics response for', track.title, ':', lyricsData); // Debug log
           const lyrics = lyricsData.message?.body?.lyrics?.lyrics_body || ''
           return { ...track, lyrics }
         } catch (error) {

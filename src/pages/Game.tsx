@@ -39,9 +39,12 @@ const Game = () => {
   useEffect(() => {
     const fetchSongData = async () => {
       try {
+        console.log('Fetching song data for ID:', songId); // Debug log
         const { data, error } = await supabase.functions.invoke("search-songs", {
           body: { spotify_id: songId },
         });
+
+        console.log('Response:', data, error); // Debug log
 
         if (error) throw error;
 
@@ -53,8 +56,11 @@ const Game = () => {
             songTitle: song.title,
             artistName: song.artist,
           }));
+        } else {
+          throw new Error('Song not found');
         }
       } catch (error) {
+        console.error('Error loading song:', error); // Debug log
         toast({
           title: "Error loading song",
           description: "Please try again later",
@@ -63,7 +69,9 @@ const Game = () => {
       }
     };
 
-    fetchSongData();
+    if (songId) {
+      fetchSongData();
+    }
   }, [songId, toast]);
 
   const resetGame = useCallback(() => {
