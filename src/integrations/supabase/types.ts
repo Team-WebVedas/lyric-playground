@@ -9,7 +9,78 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      songs: {
+        Row: {
+          artist: string
+          created_at: string
+          id: string
+          lyrics: string | null
+          spotify_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          artist: string
+          created_at?: string
+          id?: string
+          lyrics?: string | null
+          spotify_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          artist?: string
+          created_at?: string
+          id?: string
+          lyrics?: string | null
+          spotify_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_progress: {
+        Row: {
+          accuracy: number
+          completed_at: string
+          id: string
+          song_id: string
+          user_id: string
+          wpm: number
+        }
+        Insert: {
+          accuracy: number
+          completed_at?: string
+          id?: string
+          song_id: string
+          user_id: string
+          wpm: number
+        }
+        Update: {
+          accuracy?: number
+          completed_at?: string
+          id?: string
+          song_id?: string
+          user_id?: string
+          wpm?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_songs"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_progress_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
