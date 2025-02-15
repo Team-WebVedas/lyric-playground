@@ -4,9 +4,36 @@ import { Link } from "react-router-dom";
 import { Search, Play, BarChart2, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
+
+  const { data: songs, isLoading } = useQuery({
+    queryKey: ["songs", searchQuery],
+    queryFn: async () => {
+      if (!searchQuery.trim()) return [];
+
+      const { data, error } = await supabase.functions.invoke("search-songs", {
+        body: { query: searchQuery },
+      });
+
+      if (error) {
+        toast({
+          title: "Error searching songs",
+          description: "Please try again later",
+          variant: "destructive",
+        });
+        throw error;
+      }
+
+      return data || [];
+    },
+    enabled: searchQuery.trim().length > 0,
+  });
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 space-y-8">
@@ -23,22 +50,40 @@ const Index = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1"
           />
-          <Button size="icon">
+          <Button size="icon" disabled={isLoading}>
             <Search className="h-4 w-4" />
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          {/* Song results will go here */}
-          <div className="p-4 rounded-lg border hover:bg-accent cursor-pointer transition-colors">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Song Title</h3>
-                <p className="text-sm text-muted-foreground">Artist Name</p>
-              </div>
-              <Play className="h-5 w-5" />
+        <div className="grid grid-cols-1 gap-4 max-h-[400px] overflow-y-auto">
+          {isLoading && (
+            <div className="text-center py-4 text-muted-foreground">
+              Searching...
             </div>
-          </div>
+          )}
+          
+          {!isLoading && songs?.length === 0 && searchQuery.trim() && (
+            <div className="text-center py-4 text-muted-foreground">
+              No songs found
+            </div>
+          )}
+
+          {!isLoading &&
+            songs?.map((song: any) => (
+              <Link 
+                key={song.spotify_id} 
+                to={`/game/${song.spotify_id}`}
+                className="p-4 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium">{song.title}</h3>
+                    <p className="text-sm text-muted-foreground">{song.artist}</p>
+                  </div>
+                  <Play className="h-5 w-5" />
+                </div>
+              </Link>
+            ))}
         </div>
       </div>
 
