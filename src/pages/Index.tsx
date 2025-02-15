@@ -17,11 +17,28 @@ const Index = () => {
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
 
-      const { data, error } = await supabase.functions.invoke("search-songs", {
-        body: { query: searchQuery },
-      });
+      try {
+        console.log('Searching for:', searchQuery); // Debug log
+        const { data, error } = await supabase.functions.invoke("search-songs", {
+          body: { 
+            query: searchQuery.trim() 
+          },
+        });
 
-      if (error) {
+        console.log('Response:', data, error); // Debug log
+
+        if (error) {
+          toast({
+            title: "Error searching songs",
+            description: "Please try again later",
+            variant: "destructive",
+          });
+          throw error;
+        }
+
+        return data || [];
+      } catch (error) {
+        console.error('Search error:', error); // Debug log
         toast({
           title: "Error searching songs",
           description: "Please try again later",
@@ -29,8 +46,6 @@ const Index = () => {
         });
         throw error;
       }
-
-      return data || [];
     },
     enabled: searchQuery.trim().length > 0,
   });

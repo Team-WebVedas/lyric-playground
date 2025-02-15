@@ -19,6 +19,18 @@ serve(async (req) => {
 
   try {
     const { query } = await req.json()
+    console.log('Received query:', query); // Debug log
+
+    if (!query) {
+      return new Response(
+        JSON.stringify({ error: 'Query parameter is required' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
     const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, MUSIXMATCH_API_KEY } = Deno.env.toObject()
 
     // Get Spotify access token
@@ -34,6 +46,7 @@ serve(async (req) => {
     })
 
     const { access_token } = await spotifyTokenResponse.json()
+    console.log('Got Spotify access token'); // Debug log
 
     // Search Spotify
     const spotifyResponse = await fetch(
@@ -46,6 +59,17 @@ serve(async (req) => {
     )
 
     const spotifyData = await spotifyResponse.json()
+    console.log('Spotify search results:', spotifyData); // Debug log
+
+    if (!spotifyData.tracks?.items) {
+      return new Response(
+        JSON.stringify({ error: 'No tracks found' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
     const tracks = spotifyData.tracks.items.map((track: any) => ({
       spotify_id: track.id,
       title: track.name,
@@ -55,14 +79,19 @@ serve(async (req) => {
     // For each track, get lyrics from Musixmatch
     const tracksWithLyrics = await Promise.all(
       tracks.map(async (track: any) => {
-        const lyricsResponse = await fetch(
-          `${MUSIXMATCH_API_URL}/matcher.lyrics.get?q_track=${encodeURIComponent(
-            track.title
-          )}&q_artist=${encodeURIComponent(track.artist)}&apikey=${MUSIXMATCH_API_KEY}`
-        )
-        const lyricsData = await lyricsResponse.json()
-        const lyrics = lyricsData.message?.body?.lyrics?.lyrics_body || ''
-        return { ...track, lyrics }
+        try {
+          const lyricsResponse = await fetch(
+            `${MUSIXMATCH_API_URL}/matcher.lyrics.get?q_track=${encodeURIComponent(
+              track.title
+            )}&q_artist=${encodeURIComponent(track.artist)}&apikey=${MUSIXMATCH_API_KEY}`
+          )
+          const lyricsData = await lyricsResponse.json()
+          const lyrics = lyricsData.message?.body?.lyrics?.lyrics_body || ''
+          return { ...track, lyrics }
+        } catch (error) {
+          console.error('Error fetching lyrics:', error);
+          return { ...track, lyrics: '' }
+        }
       })
     )
 
@@ -71,9 +100,12 @@ serve(async (req) => {
     })
   } catch (error) {
     console.error('Error:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
   }
 })
