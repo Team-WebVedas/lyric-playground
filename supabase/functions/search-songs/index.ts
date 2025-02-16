@@ -9,28 +9,16 @@ const corsHeaders = {
 
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token'
 const SPOTIFY_SEARCH_URL = 'https://api.spotify.com/v1/search'
-const SPOTIFY_TRACK_URL = 'https://api.spotify.com/v1/tracks'
 const MUSIXMATCH_API_URL = 'https://api.musixmatch.com/ws/1.1'
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
     const { query, spotify_id } = await req.json()
-    console.log('Received query:', query, 'spotify_id:', spotify_id); // Debug log
-
-    if (!query && !spotify_id) {
-      return new Response(
-        JSON.stringify({ error: 'Either query or spotify_id parameter is required' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
+    let spotifyData;
 
     const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, MUSIXMATCH_API_KEY } = Deno.env.toObject()
 
@@ -47,14 +35,11 @@ serve(async (req) => {
     })
 
     const { access_token } = await spotifyTokenResponse.json()
-    console.log('Got Spotify access token'); // Debug log
-
-    let tracks = [];
 
     if (spotify_id) {
-      // Fetch single track
+      // Fetch specific track by ID
       const trackResponse = await fetch(
-        `${SPOTIFY_TRACK_URL}/${spotify_id}`,
+        `https://api.spotify.com/v1/tracks/${spotify_id}`,
         {
           headers: {
             Authorization: `Bearer ${access_token}`,
@@ -62,18 +47,8 @@ serve(async (req) => {
         }
       )
       const trackData = await trackResponse.json()
-      console.log('Spotify track data:', trackData); // Debug log
-
-      if (trackData.error) {
-        throw new Error(trackData.error.message);
-      }
-
-      tracks = [{
-        spotify_id: trackData.id,
-        title: trackData.name,
-        artist: trackData.artists[0].name,
-      }];
-    } else {
+      spotifyData = { tracks: { items: [trackData] } }
+    } else if (query) {
       // Search tracks
       const spotifyResponse = await fetch(
         `${SPOTIFY_SEARCH_URL}?q=${encodeURIComponent(query)}&type=track&limit=5`,
@@ -83,25 +58,32 @@ serve(async (req) => {
           },
         }
       )
-
-      const spotifyData = await spotifyResponse.json()
-      console.log('Spotify search results:', spotifyData); // Debug log
-
-      if (!spotifyData.tracks?.items) {
-        return new Response(
-          JSON.stringify({ error: 'No tracks found' }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        )
-      }
-
-      tracks = spotifyData.tracks.items.map((track: any) => ({
-        spotify_id: track.id,
-        title: track.name,
-        artist: track.artists[0].name,
-      }));
+      spotifyData = await spotifyResponse.json()
+    } else {
+      return new Response(
+        JSON.stringify({ error: 'Either query or spotify_id is required' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
     }
+
+    if (!spotifyData.tracks?.items) {
+      return new Response(
+        JSON.stringify({ error: 'No tracks found' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const tracks = spotifyData.tracks.items.map((track: any) => ({
+      spotify_id: track.id,
+      title: track.name,
+      artist: track.artists[0].name,
+      preview_url: track.preview_url,
+    }))
 
     // For each track, get lyrics from Musixmatch
     const tracksWithLyrics = await Promise.all(
@@ -113,11 +95,10 @@ serve(async (req) => {
             )}&q_artist=${encodeURIComponent(track.artist)}&apikey=${MUSIXMATCH_API_KEY}`
           )
           const lyricsData = await lyricsResponse.json()
-          console.log('Lyrics response for', track.title, ':', lyricsData); // Debug log
           const lyrics = lyricsData.message?.body?.lyrics?.lyrics_body || ''
           return { ...track, lyrics }
         } catch (error) {
-          console.error('Error fetching lyrics:', error);
+          console.error('Error fetching lyrics:', error)
           return { ...track, lyrics: '' }
         }
       })

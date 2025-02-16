@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
@@ -55,6 +54,7 @@ const Game = () => {
 
         if (data && data[0]) {
           const song = data[0];
+          console.log('Song data:', song); // Debug log
           setGameState(prev => ({
             ...prev,
             currentLyrics: song.lyrics.split('\n').filter(Boolean),
@@ -64,8 +64,11 @@ const Game = () => {
 
           // Initialize audio player if preview_url exists
           if (song.preview_url) {
+            console.log('Setting up audio with URL:', song.preview_url); // Debug log
             audioRef.current = new Audio(song.preview_url);
             audioRef.current.loop = true;
+          } else {
+            console.log('No preview URL available'); // Debug log
           }
         } else {
           throw new Error('Song not found');
@@ -93,7 +96,6 @@ const Game = () => {
     };
   }, [songId, toast]);
 
-  // Timer effect
   useEffect(() => {
     if (isPlaying && gameState.timeLeft > 0) {
       timerRef.current = setInterval(() => {
@@ -229,8 +231,8 @@ const Game = () => {
   const { wpm, accuracy } = calculateCurrentStats();
 
   const getLineColor = (index: number) => {
-    if (index === gameState.currentLineIndex) return "text-white font-medium"; // Active line
-    return "text-gray-500"; // Inactive line
+    if (index === gameState.currentLineIndex) return "text-white font-bold"; // Active line (made more prominent)
+    return "text-gray-400"; // Inactive lines (slightly lighter gray)
   };
 
   const getCharColor = (typedChar: string, correctChar: string) => {
@@ -267,11 +269,11 @@ const Game = () => {
 
         <Progress value={progress} className="w-full" />
 
-        <div className="lyrics-container h-64 overflow-y-auto space-y-2">
+        <div className="lyrics-container h-64 overflow-y-auto space-y-4">
           {gameState.currentLyrics.map((line, index) => (
             <div
               key={index}
-              className={`lyric-line ${getLineColor(index)}`}
+              className={`lyric-line transition-colors duration-200 text-center ${getLineColor(index)}`}
             >
               {index === gameState.currentLineIndex
                 ? line.split("").map((char, charIndex) => (
