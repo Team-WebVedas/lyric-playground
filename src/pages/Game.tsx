@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,10 @@ interface GameState {
   startTime: number | null;
   songTitle: string;
   artistName: string;
+  timeLeft: number;
 }
+
+const GAME_DURATION = 30; // 30 seconds
 
 const Game = () => {
   const { songId } = useParams();
@@ -24,6 +27,8 @@ const Game = () => {
   const [progress, setProgress] = useState(0);
   const [typedText, setTypedText] = useState("");
   const { toast } = useToast();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   const [gameState, setGameState] = useState<GameState>({
     currentLyrics: [],
@@ -33,18 +38,18 @@ const Game = () => {
     startTime: null,
     songTitle: "",
     artistName: "",
+    timeLeft: GAME_DURATION,
   });
 
-  // Fetch song data when component mounts
   useEffect(() => {
     const fetchSongData = async () => {
       try {
-        console.log('Fetching song data for ID:', songId); // Debug log
+        console.log('Fetching song data for ID:', songId);
         const { data, error } = await supabase.functions.invoke("search-songs", {
           body: { spotify_id: songId },
         });
 
-        console.log('Response:', data, error); // Debug log
+        console.log('Response:', data, error);
 
         if (error) throw error;
 
@@ -56,11 +61,17 @@ const Game = () => {
             songTitle: song.title,
             artistName: song.artist,
           }));
+
+          // Initialize audio player if preview_url exists
+          if (song.preview_url) {
+            audioRef.current = new Audio(song.preview_url);
+            audioRef.current.loop = true;
+          }
         } else {
           throw new Error('Song not found');
         }
       } catch (error) {
-        console.error('Error loading song:', error); // Debug log
+        console.error('Error loading song:', error);
         toast({
           title: "Error loading song",
           description: "Please try again later",
@@ -72,18 +83,55 @@ const Game = () => {
     if (songId) {
       fetchSongData();
     }
+
+    // Cleanup audio on unmount
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, [songId, toast]);
+
+  // Timer effect
+  useEffect(() => {
+    if (isPlaying && gameState.timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setGameState(prev => {
+          const newTimeLeft = prev.timeLeft - 1;
+          if (newTimeLeft <= 0) {
+            handleGameComplete();
+          }
+          return { ...prev, timeLeft: newTimeLeft };
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isPlaying, gameState.timeLeft]);
 
   const resetGame = useCallback(() => {
     setIsPlaying(false);
     setProgress(0);
     setTypedText("");
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
     setGameState(prev => ({
       ...prev,
       currentLineIndex: 0,
       typedCharacters: 0,
       correctCharacters: 0,
       startTime: null,
+      timeLeft: GAME_DURATION,
     }));
   }, []);
 
@@ -93,13 +141,19 @@ const Game = () => {
       if (!gameState.startTime) {
         setGameState(prev => ({ ...prev, startTime: Date.now() }));
       }
+      if (audioRef.current) {
+        audioRef.current.play().catch(console.error);
+      }
     } else {
       setIsPlaying(false);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     }
   };
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!isPlaying || !gameState.currentLyrics.length) return;
+    if (!isPlaying || !gameState.currentLyrics.length || gameState.timeLeft <= 0) return;
 
     const currentLine = gameState.currentLyrics[gameState.currentLineIndex];
     
@@ -113,7 +167,6 @@ const Game = () => {
         }));
         setTypedText("");
 
-        // Calculate progress
         const newProgress = ((gameState.currentLineIndex + 1) / gameState.currentLyrics.length) * 100;
         setProgress(newProgress);
 
@@ -125,13 +178,20 @@ const Game = () => {
   };
 
   const handleGameComplete = async () => {
+    setIsPlaying(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
     if (!gameState.startTime) return;
 
     const timeElapsed = (Date.now() - gameState.startTime) / 1000 / 60; // in minutes
     const wpm = calculateWPM(gameState.typedCharacters, timeElapsed);
     const accuracy = calculateAccuracy(gameState.correctCharacters, gameState.typedCharacters);
 
-    // Save progress to database
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -154,15 +214,12 @@ const Game = () => {
         variant: "destructive",
       });
     }
-
-    setIsPlaying(false);
   };
 
-  // Calculate current stats
   const calculateCurrentStats = () => {
     if (!gameState.startTime) return { wpm: 0, accuracy: 0 };
     
-    const timeElapsed = (Date.now() - gameState.startTime) / 1000 / 60; // in minutes
+    const timeElapsed = (Date.now() - gameState.startTime) / 1000 / 60;
     const wpm = calculateWPM(gameState.typedCharacters, timeElapsed);
     const accuracy = calculateAccuracy(gameState.correctCharacters, gameState.typedCharacters);
     
@@ -172,13 +229,12 @@ const Game = () => {
   const { wpm, accuracy } = calculateCurrentStats();
 
   const getLineColor = (index: number) => {
-    if (index < gameState.currentLineIndex) return "text-green-500"; // Completed line
-    if (index === gameState.currentLineIndex) return "text-primary"; // Current line
-    return "text-muted-foreground"; // Future line
+    if (index === gameState.currentLineIndex) return "text-white font-medium"; // Active line
+    return "text-gray-500"; // Inactive line
   };
 
   const getCharColor = (typedChar: string, correctChar: string) => {
-    if (!typedChar) return "text-white";
+    if (!typedChar) return "";
     return typedChar === correctChar ? "text-green-500" : "text-red-500";
   };
 
@@ -190,17 +246,23 @@ const Game = () => {
             <h2 className="text-2xl font-bold">{gameState.songTitle}</h2>
             <p className="text-muted-foreground">{gameState.artistName}</p>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handlePlayPause}
-          >
-            {isPlaying ? (
-              <Pause className="h-4 w-4" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="text-xl font-mono">
+              {Math.max(0, gameState.timeLeft)}s
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePlayPause}
+              disabled={gameState.timeLeft <= 0}
+            >
+              {isPlaying ? (
+                <Pause className="h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
         <Progress value={progress} className="w-full" />
@@ -209,9 +271,7 @@ const Game = () => {
           {gameState.currentLyrics.map((line, index) => (
             <div
               key={index}
-              className={`lyric-line ${getLineColor(index)} ${
-                index === gameState.currentLineIndex ? "font-medium" : ""
-              }`}
+              className={`lyric-line ${getLineColor(index)}`}
             >
               {index === gameState.currentLineIndex
                 ? line.split("").map((char, charIndex) => (
@@ -237,7 +297,7 @@ const Game = () => {
           value={typedText}
           onChange={(e) => setTypedText(e.target.value)}
           onKeyDown={handleKeyPress}
-          disabled={!isPlaying}
+          disabled={!isPlaying || gameState.timeLeft <= 0}
         />
 
         <div className="flex justify-between items-center">
