@@ -54,7 +54,7 @@ const Game = () => {
 
         if (data && data[0]) {
           const song = data[0];
-          console.log('Song data:', song); // Debug log
+          console.log('Song data:', song);
           setGameState(prev => ({
             ...prev,
             currentLyrics: song.lyrics.split('\n').filter(Boolean),
@@ -62,13 +62,17 @@ const Game = () => {
             artistName: song.artist,
           }));
 
-          // Initialize audio player if preview_url exists
           if (song.preview_url) {
-            console.log('Setting up audio with URL:', song.preview_url); // Debug log
+            console.log('Setting up audio with URL:', song.preview_url);
             audioRef.current = new Audio(song.preview_url);
             audioRef.current.loop = true;
           } else {
-            console.log('No preview URL available'); // Debug log
+            console.log('No preview URL available');
+            toast({
+              title: "No song preview available",
+              description: "This song doesn't have a preview available from Spotify, but you can still practice typing the lyrics!",
+              duration: 5000,
+            });
           }
         } else {
           throw new Error('Song not found');
@@ -87,7 +91,6 @@ const Game = () => {
       fetchSongData();
     }
 
-    // Cleanup audio on unmount
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
