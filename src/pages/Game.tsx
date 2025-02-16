@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
@@ -15,10 +16,7 @@ interface GameState {
   startTime: number | null;
   songTitle: string;
   artistName: string;
-  timeLeft: number;
 }
-
-const GAME_DURATION = 30; // 30 seconds
 
 const Game = () => {
   const { songId } = useParams();
@@ -27,7 +25,6 @@ const Game = () => {
   const [typedText, setTypedText] = useState("");
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
   
   const [gameState, setGameState] = useState<GameState>({
@@ -38,7 +35,6 @@ const Game = () => {
     startTime: null,
     songTitle: "",
     artistName: "",
-    timeLeft: GAME_DURATION,
   });
 
   useEffect(() => {
@@ -100,26 +96,6 @@ const Game = () => {
     };
   }, [songId, toast]);
 
-  useEffect(() => {
-    if (isPlaying && gameState.timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setGameState(prev => {
-          const newTimeLeft = prev.timeLeft - 1;
-          if (newTimeLeft <= 0) {
-            handleGameComplete();
-          }
-          return { ...prev, timeLeft: newTimeLeft };
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [isPlaying, gameState.timeLeft]);
-
   const resetGame = useCallback(() => {
     setIsPlaying(false);
     setProgress(0);
@@ -128,16 +104,12 @@ const Game = () => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
     setGameState(prev => ({
       ...prev,
       currentLineIndex: 0,
       typedCharacters: 0,
       correctCharacters: 0,
       startTime: null,
-      timeLeft: GAME_DURATION,
     }));
   }, []);
 
@@ -159,7 +131,7 @@ const Game = () => {
   };
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!isPlaying || !gameState.currentLyrics.length || gameState.timeLeft <= 0) return;
+    if (!isPlaying || !gameState.currentLyrics.length) return;
 
     const currentLine = gameState.currentLyrics[gameState.currentLineIndex];
     
@@ -194,9 +166,6 @@ const Game = () => {
     setIsPlaying(false);
     if (audioRef.current) {
       audioRef.current.pause();
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
     }
 
     if (!gameState.startTime) return;
@@ -242,8 +211,8 @@ const Game = () => {
   const { wpm, accuracy } = calculateCurrentStats();
 
   const getLineColor = (index: number) => {
-    if (index === gameState.currentLineIndex) return "text-white font-bold"; // Active line (made more prominent)
-    return "text-gray-400"; // Inactive lines (slightly lighter gray)
+    if (index === gameState.currentLineIndex) return "text-white font-bold";
+    return "text-gray-400";
   };
 
   const getCharColor = (typedChar: string, correctChar: string) => {
@@ -260,14 +229,10 @@ const Game = () => {
             <p className="text-muted-foreground">{gameState.artistName}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-xl font-mono">
-              {Math.max(0, gameState.timeLeft)}s
-            </div>
             <Button
               variant="outline"
               size="icon"
               onClick={handlePlayPause}
-              disabled={gameState.timeLeft <= 0}
             >
               {isPlaying ? (
                 <Pause className="h-4 w-4" />
@@ -311,7 +276,7 @@ const Game = () => {
           value={typedText}
           onChange={(e) => setTypedText(e.target.value)}
           onKeyDown={handleKeyPress}
-          disabled={!isPlaying || gameState.timeLeft <= 0}
+          disabled={!isPlaying}
         />
 
         <div className="flex justify-between items-center">
