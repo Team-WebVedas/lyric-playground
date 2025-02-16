@@ -28,6 +28,7 @@ const Game = () => {
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeLyricRef = useRef<HTMLDivElement | null>(null);
   
   const [gameState, setGameState] = useState<GameState>({
     currentLyrics: [],
@@ -175,6 +176,13 @@ const Game = () => {
         const newProgress = ((gameState.currentLineIndex + 1) / gameState.currentLyrics.length) * 100;
         setProgress(newProgress);
 
+        if (activeLyricRef.current) {
+          activeLyricRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        }
+
         if (gameState.currentLineIndex + 1 >= gameState.currentLyrics.length) {
           handleGameComplete();
         }
@@ -272,10 +280,11 @@ const Game = () => {
 
         <Progress value={progress} className="w-full" />
 
-        <div className="lyrics-container h-64 overflow-y-auto space-y-4">
+        <div className="lyrics-container h-64 overflow-y-auto space-y-4 relative">
           {gameState.currentLyrics.map((line, index) => (
             <div
               key={index}
+              ref={index === gameState.currentLineIndex ? activeLyricRef : null}
               className={`lyric-line transition-colors duration-200 text-center ${getLineColor(index)}`}
             >
               {index === gameState.currentLineIndex
