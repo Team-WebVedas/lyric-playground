@@ -18,8 +18,19 @@ serve(async (req) => {
 
   try {
     const { query, spotify_id } = await req.json()
-    let spotifyData;
+    
+    // Validate input parameters
+    if (!query && !spotify_id) {
+      return new Response(
+        JSON.stringify({ error: 'Either query or spotify_id is required' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
+    let spotifyData;
     const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, MUSIXMATCH_API_KEY } = Deno.env.toObject()
 
     // Get Spotify access token
@@ -34,7 +45,12 @@ serve(async (req) => {
       }),
     })
 
-    const { access_token } = await spotifyTokenResponse.json()
+    const tokenData = await spotifyTokenResponse.json()
+    if (!tokenData.access_token) {
+      throw new Error('Failed to get Spotify access token')
+    }
+
+    const { access_token } = tokenData
 
     if (spotify_id) {
       // Fetch specific track by ID
@@ -46,6 +62,11 @@ serve(async (req) => {
           },
         }
       )
+      
+      if (!trackResponse.ok) {
+        throw new Error(`Spotify API error: ${trackResponse.statusText}`)
+      }
+      
       const trackData = await trackResponse.json()
       spotifyData = { tracks: { items: [trackData] } }
     } else if (query) {
@@ -58,18 +79,15 @@ serve(async (req) => {
           },
         }
       )
+      
+      if (!spotifyResponse.ok) {
+        throw new Error(`Spotify API error: ${spotifyResponse.statusText}`)
+      }
+      
       spotifyData = await spotifyResponse.json()
-    } else {
-      return new Response(
-        JSON.stringify({ error: 'Either query or spotify_id is required' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
     }
 
-    if (!spotifyData.tracks?.items) {
+    if (!spotifyData?.tracks?.items?.length) {
       return new Response(
         JSON.stringify({ error: 'No tracks found' }),
         { 
@@ -94,6 +112,12 @@ serve(async (req) => {
               track.title
             )}&q_artist=${encodeURIComponent(track.artist)}&apikey=${MUSIXMATCH_API_KEY}`
           )
+          
+          if (!lyricsResponse.ok) {
+            console.error('Musixmatch API error:', lyricsResponse.statusText)
+            return { ...track, lyrics: '' }
+          }
+          
           const lyricsData = await lyricsResponse.json()
           const lyrics = lyricsData.message?.body?.lyrics?.lyrics_body || ''
           return { ...track, lyrics }
@@ -110,7 +134,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack 
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
