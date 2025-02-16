@@ -1,55 +1,37 @@
-# Welcome to your Lovable project
+# 🎵 Lyric Playground  
 
-## Project info
+Welcome to **Lyric Playground** – a dynamic and interactive music-driven project! 🚀  
 
-**URL**: https://lovable.dev/projects/bb4b6e00-ac4a-4aa8-a807-f1a5ca2cad4f
+## 🌐 Live Project  
 
-## How can I edit this code?
+🔗 **URL**: [Lyric Playground](https://lovable.dev/projects/bb4b6e00-ac4a-4aa8-a807-f1a5ca2cad4f)  
 
-There are several ways of editing your application.
+## 🛠️ Tech Stack  
 
-**Use your preferred IDE**
+This project is built with:  
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- ⚡ **Vite** – Fast and optimized frontend tooling  
+- 🟦 **TypeScript** – Ensuring type safety and scalability  
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 💻 Getting Started  
 
-Follow these steps:
+You can edit this project using various methods:  
+
+### 1️⃣ Clone & Run Locally  
+
+Make sure you have **Node.js** & **npm** installed. If not, install them using [nvm](https://github.com/nvm-sh/nvm#installing-and-updating).  
+
+Then, follow these steps:  
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
+# Navigate to the project folder
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server (hot reload enabled)
 npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with .
-
-- Vite
-- TypeScript
-
-
-
